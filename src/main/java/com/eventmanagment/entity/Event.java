@@ -1,66 +1,76 @@
 package com.eventmanagment.entity;
 
-import jakarta.persistence.Entity;
-import jakarta.persistence.EnumType;
-import jakarta.persistence.Enumerated;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
-import jakarta.persistence.JoinColumn;
-import jakarta.persistence.ManyToOne;
+import jakarta.persistence.*;
+import jakarta.validation.constraints.Future;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
-import jakarta.validation.constraints.Pattern;
+import org.hibernate.annotations.CreationTimestamp;
+
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 @Entity
+@Table(name = "events")
 public class Event {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @NotBlank(message = "Title is required")
+    @NotBlank(message = "Event title is required")
+    @Column(nullable = false)
     private String title;
 
     @NotBlank(message = "Description is required")
+    @Column(nullable = false, length = 2000)
     private String description;
 
-    @NotBlank(message = "Date is required")
-    @Pattern(
-            regexp = "^\\d{4}-\\d{2}-\\d{2}$",
-            message = "Date must be in yyyy-MM-dd format"
-    )
-    private String date;
-
-    @NotBlank(message = "Time is required")
-    private String time;
-
     @NotBlank(message = "Location is required")
+    @Column(nullable = false)
     private String location;
 
-    @NotBlank(message = "Category is required")
-    private String category;
+    @NotNull(message = "Event date is required")
+    @Future(message = "Event date must be in the future")
+    @Column(nullable = false)
+    private LocalDateTime eventDate;
 
-    @NotNull(message = "Capacity is required")
     @Min(value = 1, message = "Capacity must be at least 1")
-    private Integer capacity;
+    @Column(nullable = false)
+    private int capacity;
 
-    @NotNull(message = "Ticket price is required")
-    @Min(value = 0, message = "Ticket price cannot be negative")
-    private Double ticketPrice;
+    @Column(nullable = false)
+    private int availableSeats;
 
-    @NotNull(message = "Status is required")
-    @Enumerated(EnumType.STRING)
-    private EventStatus status;
-
-    @ManyToOne
-    @JoinColumn(name = "organizer_id")
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "organizer_id", nullable = false)
     private User organizer;
 
-    // =========================
-    // GETTERS AND SETTERS
-    // =========================
+    @CreationTimestamp
+    @Column(nullable = false, updatable = false)
+    private LocalDateTime createdAt;
+
+    @OneToMany(mappedBy = "event", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<Registration> registrations = new ArrayList<>();
+
+    public Event() {
+    }
+
+    public Event(
+            String title,
+            String description,
+            String location,
+            LocalDateTime eventDate,
+            int capacity
+    ) {
+        this.title = title;
+        this.description = description;
+        this.location = location;
+        this.eventDate = eventDate;
+        this.capacity = capacity;
+        this.availableSeats = capacity;
+    }
 
     public Long getId() {
         return id;
@@ -86,22 +96,6 @@ public class Event {
         this.description = description;
     }
 
-    public String getDate() {
-        return date;
-    }
-
-    public void setDate(String date) {
-        this.date = date;
-    }
-
-    public String getTime() {
-        return time;
-    }
-
-    public void setTime(String time) {
-        this.time = time;
-    }
-
     public String getLocation() {
         return location;
     }
@@ -110,36 +104,32 @@ public class Event {
         this.location = location;
     }
 
-    public String getCategory() {
-        return category;
+    public LocalDateTime getEventDate() {
+        return eventDate;
     }
 
-    public void setCategory(String category) {
-        this.category = category;
+    public void setEventDate(LocalDateTime eventDate) {
+        this.eventDate = eventDate;
     }
 
-    public Integer getCapacity() {
+    public int getCapacity() {
         return capacity;
     }
 
-    public void setCapacity(Integer capacity) {
+    public void setCapacity(int capacity) {
         this.capacity = capacity;
+
+        if (this.availableSeats == 0 || this.availableSeats > capacity) {
+            this.availableSeats = capacity;
+        }
     }
 
-    public Double getTicketPrice() {
-        return ticketPrice;
+    public int getAvailableSeats() {
+        return availableSeats;
     }
 
-    public void setTicketPrice(Double ticketPrice) {
-        this.ticketPrice = ticketPrice;
-    }
-
-    public EventStatus getStatus() {
-        return status;
-    }
-
-    public void setStatus(EventStatus status) {
-        this.status = status;
+    public void setAvailableSeats(int availableSeats) {
+        this.availableSeats = availableSeats;
     }
 
     public User getOrganizer() {
@@ -148,5 +138,21 @@ public class Event {
 
     public void setOrganizer(User organizer) {
         this.organizer = organizer;
+    }
+
+    public LocalDateTime getCreatedAt() {
+        return createdAt;
+    }
+
+    public void setCreatedAt(LocalDateTime createdAt) {
+        this.createdAt = createdAt;
+    }
+
+    public List<Registration> getRegistrations() {
+        return registrations;
+    }
+
+    public void setRegistrations(List<Registration> registrations) {
+        this.registrations = registrations;
     }
 }

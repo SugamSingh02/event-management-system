@@ -1,16 +1,17 @@
 package com.eventmanagment.service;
 
+import com.eventmanagment.dto.EventDTO;
 import com.eventmanagment.entity.Event;
-import com.eventmanagment.entity.EventStatus;
 import com.eventmanagment.entity.User;
-import com.eventmanagment.entity.UserRole;
+import com.eventmanagment.exception.ResourceNotFoundException;
 import com.eventmanagment.repository.EventRepository;
 import com.eventmanagment.repository.UserRepository;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDate;
-import java.time.ZoneId;
-import java.time.format.DateTimeParseException;
 import java.util.List;
 
 @Service
@@ -18,402 +19,171 @@ public class EventService {
 
     private final EventRepository eventRepository;
     private final UserRepository userRepository;
-    private final NotificationService notificationService;
 
     public EventService(
             EventRepository eventRepository,
-            UserRepository userRepository,
-            NotificationService notificationService) {
+            UserRepository userRepository) {
 
         this.eventRepository = eventRepository;
         this.userRepository = userRepository;
-        this.notificationService = notificationService;
     }
 
-    // =========================
-    // VALIDATE EVENT DATE
-    // =========================
+    public EventDTO createEvent(EventDTO dto) {
 
-    private void validateEventDate(String date) {
+        User currentUser = getAuthenticatedUser();
 
-        try {
-            LocalDate eventDate = LocalDate.parse(date);
+        if (!currentUser.getRole().equals("ADMIN")
+                && !currentUser.getRole().equals("ORGANIZER")) {
 
-            LocalDate today =
-                    LocalDate.now(ZoneId.of("Asia/Kolkata"));
-
-            if (eventDate.isBefore(today)) {
-                throw new RuntimeException(
-                        "Event date cannot be in the past");
-            }
-
-        } catch (DateTimeParseException e) {
-
-            throw new RuntimeException(
-                    "Invalid date format. Use yyyy-MM-dd");
+            throw new AccessDeniedException(
+                    "Only administrators and organizers can create events"
+            );
         }
+
+        Event event = new Event();
+
+        event.setTitle(dto.getTitle());
+        event.setDescription(dto.getDescription());
+        event.setLocation(dto.getLocation());
+        event.setEventDate(dto.getEventDate());
+        event.setCapacity(dto.getCapacity());
+
+        // Available seats are calculated by the server.
+        event.setAvailableSeats(dto.getCapacity());
+
+        // Organizer is always taken from the authenticated user.
+        event.setOrganizer(currentUser);
+
+        Event saved = eventRepository.save(event);
+
+        return EventDTO.fromEntity(saved);
     }
 
-    // =========================
-    // CREATE EVENT
-    // =========================
+    public List<EventDTO> getAllEvents() {
 
-    public Event createEvent(
-            Event event,
-            Long organizerId) {
+        return eventRepository.findAll()
+                .stream()
+                .map(EventDTO::fromEntity)
+                .toList();
+    }
 
-        User organizer = userRepository
-                .findById(organizerId)
+    public EventDTO getEventById(Long id) {
+
+        Event event = eventRepository.findById(id)
                 .orElseThrow(() ->
-                        new RuntimeException(
-                                "Organizer not found"));
+                        new ResourceNotFoundException(
+                                "Event not found with id: " + id
+                        ));
 
-        if (organizer.getRole() != UserRole.ORGANIZER) {
-            throw new RuntimeException(
-                    "Only organizers can create events");
+        return EventDTO.fromEntity(event);
+    }
+
+    @Transactional
+    public EventDTO updateEvent(Long id, EventDTO dto) {
+
+        Event existing = eventRepository.findByIdForUpdate(id)
+                .orElseThrow(() ->
+                        new ResourceNotFoundException(
+                                "Event not found with id: " + id
+                        ));
+
+        User currentUser = getAuthenticatedUser();
+
+        checkEventOwnership(existing, currentUser);
+
+        existing.setTitle(dto.getTitle());
+        existing.setDescription(dto.getDescription());
+        existing.setLocation(dto.getLocation());
+        existing.setEventDate(dto.getEventDate());
+
+        int newCapacity = dto.getCapacity();
+
+        int alreadyBooked =
+                existing.getCapacity()
+                        - existing.getAvailableSeats();
+
+        if (newCapacity < alreadyBooked) {
+            throw new IllegalArgumentException(
+                    "Capacity cannot be less than the number of existing registrations"
+            );
         }
 
-        validateEventDate(event.getDate());
+        existing.setCapacity(newCapacity);
 
-        event.setOrganizer(organizer);
+        existing.setAvailableSeats(
+                newCapacity - alreadyBooked
+        );
 
-        // Organizer-created event needs admin approval
-        event.setStatus(EventStatus.PENDING);
+        Event updated = eventRepository.save(existing);
 
-        return eventRepository.save(event);
+        return EventDTO.fromEntity(updated);
     }
 
-    // =========================
-    // GET ALL EVENTS
-    // =========================
+    @Transactional
+    public void deleteEvent(Long id) {
 
-    public List<Event> getAllEvents() {
-        return eventRepository.findAll();
+        Event event = eventRepository.findById(id)
+                .orElseThrow(() ->
+                        new ResourceNotFoundException(
+                                "Event not found with id: " + id
+                        ));
+
+        User currentUser = getAuthenticatedUser();
+
+        checkEventOwnership(event, currentUser);
+
+        eventRepository.delete(event);
     }
 
-    // =========================
-    // GET EVENT BY ID
-    // =========================
+    private User getAuthenticatedUser() {
 
-    public Event getEventById(Long id) {
-        return eventRepository
-                .findById(id)
-                .orElse(null);
+        Authentication authentication =
+                SecurityContextHolder
+                        .getContext()
+                        .getAuthentication();
+
+        if (authentication == null
+                || !authentication.isAuthenticated()) {
+
+            throw new AccessDeniedException(
+                    "User is not authenticated"
+            );
+        }
+
+        String email = authentication.getName();
+
+        return userRepository.findByEmail(email)
+                .orElseThrow(() ->
+                        new ResourceNotFoundException(
+                                "Authenticated user not found"
+                        ));
     }
 
-    // =========================
-    // SEARCH BY CATEGORY
-    // =========================
-
-    public List<Event> getEventsByCategory(
-            String category) {
-
-        return eventRepository
-                .findByCategory(category);
-    }
-
-    // =========================
-    // SEARCH BY TITLE
-    // =========================
-
-    public List<Event> searchEventsByTitle(
-            String title) {
-
-        return eventRepository
-                .findByTitleContainingIgnoreCase(title);
-    }
-
-    // =========================
-    // SEARCH BY LOCATION
-    // =========================
-
-    public List<Event> searchEventsByLocation(
-            String location) {
-
-        return eventRepository
-                .findByLocationContainingIgnoreCase(location);
-    }
-
-    // =========================
-    // SEARCH BY DATE
-    // =========================
-
-    public List<Event> searchEventsByDate(
-            String date) {
-
-        return eventRepository
-                .findByDate(date);
-    }
-
-    // =========================
-    // SEARCH BY STATUS
-    // =========================
-
-    public List<Event> searchEventsByStatus(
-            EventStatus status) {
-
-        return eventRepository
-                .findByStatus(status);
-    }
-
-    // =========================
-    // GET EVENTS BY ORGANIZER
-    // =========================
-
-    public List<Event> getEventsByOrganizer(
-            Long organizerId) {
-
-        return eventRepository
-                .findByOrganizerId(organizerId);
-    }
-
-    // =========================
-    // CHECK EVENT OWNER
-    // =========================
-
-    private boolean isEventOwner(
+    private void checkEventOwnership(
             Event event,
-            Long organizerId) {
+            User currentUser) {
 
-        return event.getOrganizer() != null
-                && event.getOrganizer()
+        // Admin can manage every event.
+        if (currentUser.getRole().equals("ADMIN")) {
+            return;
+        }
+
+        // Only organizers can manage events besides admins.
+        if (!currentUser.getRole().equals("ORGANIZER")) {
+            throw new AccessDeniedException(
+                    "You do not have permission to manage events"
+            );
+        }
+
+        // Organizer can manage only their own events.
+        if (event.getOrganizer() == null
+                || !event.getOrganizer()
                         .getId()
-                        .equals(organizerId);
-    }
+                        .equals(currentUser.getId())) {
 
-    // =========================
-    // UPDATE EVENT
-    // =========================
-
-    public Event updateEvent(
-            Long id,
-            Event event,
-            Long organizerId) {
-
-        Event existingEvent =
-                eventRepository
-                        .findById(id)
-                        .orElse(null);
-
-        if (existingEvent == null) {
-            return null;
-        }
-
-        if (!isEventOwner(
-                existingEvent,
-                organizerId)) {
-
-            throw new RuntimeException(
-                    "You can only update your own events");
-        }
-
-        validateEventDate(event.getDate());
-
-        existingEvent.setTitle(event.getTitle());
-        existingEvent.setDescription(event.getDescription());
-        existingEvent.setDate(event.getDate());
-        existingEvent.setTime(event.getTime());
-        existingEvent.setLocation(event.getLocation());
-        existingEvent.setCategory(event.getCategory());
-        existingEvent.setCapacity(event.getCapacity());
-        existingEvent.setTicketPrice(event.getTicketPrice());
-
-        // Any organizer update requires re-approval
-        existingEvent.setStatus(EventStatus.PENDING);
-
-        return eventRepository.save(existingEvent);
-    }
-
-    // =========================
-    // DELETE EVENT
-    // =========================
-
-    public void deleteEvent(
-            Long id,
-            Long organizerId) {
-
-        Event existingEvent =
-                eventRepository
-                        .findById(id)
-                        .orElse(null);
-
-        if (existingEvent == null) {
-            throw new RuntimeException(
-                    "Event not found");
-        }
-
-        if (!isEventOwner(
-                existingEvent,
-                organizerId)) {
-
-            throw new RuntimeException(
-                    "You can only delete your own events");
-        }
-
-        eventRepository.deleteById(id);
-    }
-
-    // =========================
-    // ADMIN - PENDING EVENTS
-    // =========================
-
-    public List<Event> getPendingEvents() {
-
-        return eventRepository
-                .findByStatus(EventStatus.PENDING);
-    }
-
-    // =========================
-    // ADMIN - APPROVE EVENT
-    // =========================
-
-    public Event approveEvent(Long id) {
-
-        Event event =
-                eventRepository
-                        .findById(id)
-                        .orElse(null);
-
-        if (event == null) {
-            return null;
-        }
-
-        // Only pending events can be approved
-        if (event.getStatus()
-                != EventStatus.PENDING) {
-
-            throw new RuntimeException(
-                    "Only pending events can be approved");
-        }
-
-        event.setStatus(EventStatus.APPROVED);
-
-        Event savedEvent =
-                eventRepository.save(event);
-
-        // Notify organizer
-        if (savedEvent.getOrganizer() != null) {
-
-            notificationService.createNotification(
-                    savedEvent.getOrganizer().getId(),
-                    "Your event \"" +
-                            savedEvent.getTitle() +
-                            "\" has been approved.",
-                    "EVENT_APPROVED"
+            throw new AccessDeniedException(
+                    "You can only manage your own events"
             );
         }
-
-        return savedEvent;
-    }
-
-    // =========================
-    // ADMIN - REJECT EVENT
-    // =========================
-
-    public Event rejectEvent(Long id) {
-
-        Event event =
-                eventRepository
-                        .findById(id)
-                        .orElse(null);
-
-        if (event == null) {
-            return null;
-        }
-
-        // Only pending events can be rejected
-        if (event.getStatus()
-                != EventStatus.PENDING) {
-
-            throw new RuntimeException(
-                    "Only pending events can be rejected");
-        }
-
-        event.setStatus(EventStatus.REJECTED);
-
-        Event savedEvent =
-                eventRepository.save(event);
-
-        // Notify organizer
-        if (savedEvent.getOrganizer() != null) {
-
-            notificationService.createNotification(
-                    savedEvent.getOrganizer().getId(),
-                    "Your event \"" +
-                            savedEvent.getTitle() +
-                            "\" has been rejected.",
-                    "EVENT_REJECTED"
-            );
-        }
-
-        return savedEvent;
-    }
-
-    // =========================
-    // ADMIN STATISTICS
-    // =========================
-
-    public long getApprovedEventCount() {
-
-        return eventRepository
-                .countByStatus(EventStatus.APPROVED);
-    }
-
-    public long getPendingEventCount() {
-
-        return eventRepository
-                .countByStatus(EventStatus.PENDING);
-    }
-
-    public long getRejectedEventCount() {
-
-        return eventRepository
-                .countByStatus(EventStatus.REJECTED);
-    }
-
-    public long getTotalEventCount() {
-
-        return eventRepository.count();
-    }
-
-    // =========================
-    // ORGANIZER STATISTICS
-    // =========================
-
-    public long getOrganizerApprovedEventCount(
-            Long organizerId) {
-
-        return eventRepository
-                .countByOrganizerIdAndStatus(
-                        organizerId,
-                        EventStatus.APPROVED
-                );
-    }
-
-    public long getOrganizerPendingEventCount(
-            Long organizerId) {
-
-        return eventRepository
-                .countByOrganizerIdAndStatus(
-                        organizerId,
-                        EventStatus.PENDING
-                );
-    }
-
-    public long getOrganizerRejectedEventCount(
-            Long organizerId) {
-
-        return eventRepository
-                .countByOrganizerIdAndStatus(
-                        organizerId,
-                        EventStatus.REJECTED
-                );
-    }
-
-    public long getOrganizerTotalEventCount(
-            Long organizerId) {
-
-        return eventRepository
-                .countByOrganizerId(organizerId);
     }
 }

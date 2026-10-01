@@ -1,11 +1,19 @@
 package com.eventmanagment.service;
 
+import com.eventmanagment.dto.UserDTO;
 import com.eventmanagment.entity.User;
+import com.eventmanagment.exception.ResourceNotFoundException;
 import com.eventmanagment.repository.UserRepository;
+
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.Locale;
+import java.util.stream.Collectors;
 
 @Service
 public class UserService {
@@ -21,144 +29,401 @@ public class UserService {
         this.passwordEncoder = passwordEncoder;
     }
 
-    // =========================
-    // CREATE USER - ADMIN
-    // =========================
+    // --------------------------------------------------
+    // Public registration
+    // --------------------------------------------------
 
-    public User createUser(User user) {
+    public UserDTO registerUser(UserDTO dto) {
 
-        if (userRepository.existsByEmail(user.getEmail())) {
-            throw new RuntimeException(
-                    "Email already registered");
+        String normalizedEmail =
+                dto.getEmail() == null
+                        ? ""
+                        : dto.getEmail().trim().toLowerCase(Locale.ROOT);
+
+        String normalizedName =
+                dto.getName() == null
+                        ? ""
+                        : dto.getName().trim();
+
+        String normalizedPassword =
+                dto.getPassword() == null
+                        ? ""
+                        : dto.getPassword();
+
+        if (normalizedEmail.isBlank()
+                || normalizedName.isBlank()
+                || normalizedPassword.isBlank()) {
+
+            throw new IllegalArgumentException(
+                    "Name, email and password are required"
+            );
         }
+
+        if (userRepository.findByEmail(normalizedEmail).isPresent()) {
+            throw new IllegalArgumentException(
+                    "User with this email already exists"
+            );
+        }
+
+        User user = new User();
+
+        user.setName(normalizedName);
+        user.setEmail(normalizedEmail);
+        user.setPhone(dto.getPhone());
+
+        // Public registration always creates an ATTENDEE.
+        // The client cannot choose ADMIN or ORGANIZER.
+        user.setRole("ATTENDEE");
 
         user.setPassword(
-                passwordEncoder.encode(user.getPassword())
+                passwordEncoder.encode(normalizedPassword)
         );
 
-        return userRepository.save(user);
+        User saved = userRepository.save(user);
+
+        return UserDTO.fromEntity(saved);
     }
 
-    // =========================
-    // GET ALL USERS - ADMIN
-    // =========================
+    // --------------------------------------------------
+    // Admin user creation
+    // --------------------------------------------------
 
-    public List<User> getAllUsers() {
-        return userRepository.findAll();
-    }
+    public UserDTO createUser(UserDTO dto) {
 
-    // =========================
-    // GET USER BY ID - ADMIN
-    // =========================
+        User currentUser = getAuthenticatedUser();
 
-    public User getUserById(Long id) {
-        return userRepository.findById(id).orElse(null);
-    }
-
-    // =========================
-    // GET USER BY EMAIL - ADMIN
-    // =========================
-
-    public User getUserByEmail(String email) {
-        return userRepository.findByEmail(email).orElse(null);
-    }
-
-    // =========================
-    // GET MY PROFILE
-    // =========================
-
-    public User getMyProfile(String email) {
-
-        return userRepository
-                .findByEmail(email)
-                .orElseThrow(() ->
-                        new RuntimeException("User not found"));
-    }
-
-    // =========================
-    // UPDATE MY PROFILE
-    // =========================
-
-    public User updateMyProfile(
-            String currentEmail,
-            String name,
-            String email) {
-
-        User user = userRepository
-                .findByEmail(currentEmail)
-                .orElseThrow(() ->
-                        new RuntimeException("User not found"));
-
-        if (email == null || email.isBlank()) {
-            throw new RuntimeException(
-                    "Email is required");
+        if (!currentUser.getRole().equals("ADMIN")) {
+            throw new AccessDeniedException(
+                    "Only administrators can create users"
+            );
         }
 
-        // If email is changed, make sure another user
-        // is not already using it.
-        if (!email.equalsIgnoreCase(currentEmail)
-                && userRepository.existsByEmail(email)) {
+        String normalizedEmail =
+                dto.getEmail() == null
+                        ? ""
+                        : dto.getEmail().trim().toLowerCase(Locale.ROOT);
 
-            throw new RuntimeException(
-                    "Email already registered");
+        String normalizedName =
+                dto.getName() == null
+                        ? ""
+                        : dto.getName().trim();
+
+        String normalizedRole =
+                dto.getRole() == null
+                        ? ""
+                        : dto.getRole().trim().toUpperCase(Locale.ROOT);
+
+        String normalizedPassword =
+                dto.getPassword() == null
+                        ? ""
+                        : dto.getPassword();
+
+        if (normalizedEmail.isBlank()
+                || normalizedName.isBlank()
+                || normalizedRole.isBlank()
+                || normalizedPassword.isBlank()) {
+
+            throw new IllegalArgumentException(
+                    "Name, email, password and role are required"
+            );
         }
 
-        if (name != null && !name.isBlank()) {
-            user.setName(name);
+        validateRole(normalizedRole);
+
+        if (userRepository.findByEmail(normalizedEmail).isPresent()) {
+            throw new IllegalArgumentException(
+                    "User with this email already exists"
+            );
         }
 
-        user.setEmail(email);
+        User user = new User();
 
-        return userRepository.save(user);
+        user.setName(normalizedName);
+        user.setEmail(normalizedEmail);
+        user.setPhone(dto.getPhone());
+        user.setPassword(
+                passwordEncoder.encode(normalizedPassword)
+        );
+        user.setRole(normalizedRole);
+
+        User saved = userRepository.save(user);
+
+        return UserDTO.fromEntity(saved);
     }
 
-    // =========================
-    // CHANGE PASSWORD
-    // =========================
+    // --------------------------------------------------
+    // Login
+    // --------------------------------------------------
 
-    public void changePassword(
-            String email,
-            String currentPassword,
-            String newPassword) {
+    public UserDTO login(
+            String identifier,
+            String password,
+            String role) {
 
-        User user = userRepository
-                .findByEmail(email)
-                .orElseThrow(() ->
-                        new RuntimeException("User not found"));
+        String normalizedIdentifier =
+                identifier == null
+                        ? ""
+                        : identifier.trim();
+
+        String normalizedPassword =
+                password == null
+                        ? ""
+                        : password;
+
+        String normalizedRole =
+                role == null
+                        ? ""
+                        : role.trim().toUpperCase(Locale.ROOT);
+
+        if (normalizedIdentifier.isBlank()
+                || normalizedPassword.isBlank()
+                || normalizedRole.isBlank()) {
+
+            throw new IllegalArgumentException(
+                    "Username or email, password and role are required"
+            );
+        }
+
+        User user =
+                userRepository.findByNameOrEmail(
+                        normalizedIdentifier
+                ).orElseThrow(() ->
+                        new ResourceNotFoundException(
+                                "Invalid username/email or password"
+                        )
+                );
 
         if (!passwordEncoder.matches(
-                currentPassword,
+                normalizedPassword,
                 user.getPassword())) {
 
-            throw new RuntimeException(
-                    "Current password is incorrect");
+            throw new ResourceNotFoundException(
+                    "Invalid username/email or password"
+            );
         }
 
-        if (newPassword == null
-                || newPassword.length() < 6) {
-
-            throw new RuntimeException(
-                    "New password must be at least 6 characters");
+        if (!user.getRole().equals(normalizedRole)) {
+            throw new ResourceNotFoundException(
+                    "Selected role does not match the account role"
+            );
         }
 
-        user.setPassword(
-                passwordEncoder.encode(newPassword)
-        );
-
-        userRepository.save(user);
+        return UserDTO.fromEntity(user);
     }
 
-    // =========================
-    // DELETE USER - ADMIN
-    // =========================
+    // --------------------------------------------------
+    // Get all users
+    // --------------------------------------------------
+
+    public List<UserDTO> getAllUsers() {
+
+        return userRepository.findAll()
+                .stream()
+                .map(UserDTO::fromEntity)
+                .collect(Collectors.toList());
+    }
+
+    // --------------------------------------------------
+    // Get user by ID
+    // --------------------------------------------------
+
+    public UserDTO getUserById(Long id) {
+
+        User currentUser = getAuthenticatedUser();
+
+        boolean isAdmin =
+                currentUser.getRole().equals("ADMIN");
+
+        boolean isOwner =
+                currentUser.getId().equals(id);
+
+        if (!isAdmin && !isOwner) {
+            throw new AccessDeniedException(
+                    "You can only view your own account"
+            );
+        }
+
+        User user =
+                userRepository.findById(id)
+                        .orElseThrow(() ->
+                                new ResourceNotFoundException(
+                                        "User not found with id: " + id
+                                ));
+
+        return UserDTO.fromEntity(user);
+    }
+
+    // --------------------------------------------------
+    // Update user
+    // --------------------------------------------------
+
+    public UserDTO updateUser(Long id, UserDTO dto) {
+
+        User currentUser = getAuthenticatedUser();
+
+        boolean isAdmin =
+                currentUser.getRole().equals("ADMIN");
+
+        boolean isOwner =
+                currentUser.getId().equals(id);
+
+        if (!isAdmin && !isOwner) {
+            throw new AccessDeniedException(
+                    "You can only update your own account"
+            );
+        }
+
+        User existing =
+                userRepository.findById(id)
+                        .orElseThrow(() ->
+                                new ResourceNotFoundException(
+                                        "User not found with id: " + id
+                                ));
+
+        String normalizedEmail =
+                dto.getEmail() == null
+                        ? ""
+                        : dto.getEmail().trim().toLowerCase(Locale.ROOT);
+
+        String normalizedName =
+                dto.getName() == null
+                        ? ""
+                        : dto.getName().trim();
+
+        if (normalizedName.isBlank()
+                || normalizedEmail.isBlank()) {
+
+            throw new IllegalArgumentException(
+                    "Name and email are required"
+            );
+        }
+
+        // Prevent duplicate email on update.
+        userRepository.findByEmail(normalizedEmail)
+                .ifPresent(otherUser -> {
+
+                    if (!otherUser.getId().equals(id)) {
+                        throw new IllegalArgumentException(
+                                "User with this email already exists"
+                        );
+                    }
+                });
+
+        existing.setName(normalizedName);
+        existing.setEmail(normalizedEmail);
+        existing.setPhone(dto.getPhone());
+
+        // Only admins can change roles.
+        if (isAdmin) {
+
+            String normalizedRole =
+                    dto.getRole() == null
+                            ? ""
+                            : dto.getRole()
+                                    .trim()
+                                    .toUpperCase(Locale.ROOT);
+
+            if (!normalizedRole.isBlank()) {
+                validateRole(normalizedRole);
+                existing.setRole(normalizedRole);
+            }
+        }
+
+        // Hash only when a new password is supplied.
+        if (dto.getPassword() != null
+                && !dto.getPassword().isBlank()) {
+
+            existing.setPassword(
+                    passwordEncoder.encode(dto.getPassword())
+            );
+        }
+
+        User updated =
+                userRepository.save(existing);
+
+        return UserDTO.fromEntity(updated);
+    }
+
+    // --------------------------------------------------
+    // Delete user
+    // --------------------------------------------------
 
     public void deleteUser(Long id) {
 
-        if (!userRepository.existsById(id)) {
-            throw new RuntimeException(
-                    "User not found");
+        User currentUser = getAuthenticatedUser();
+
+        if (!currentUser.getRole().equals("ADMIN")) {
+            throw new AccessDeniedException(
+                    "Only administrators can delete users"
+            );
         }
 
-        userRepository.deleteById(id);
+        User user =
+                userRepository.findById(id)
+                        .orElseThrow(() ->
+                                new ResourceNotFoundException(
+                                        "User not found with id: " + id
+                                ));
+
+        userRepository.delete(user);
+    }
+
+    // --------------------------------------------------
+    // Find ID by login identifier
+    // --------------------------------------------------
+
+    public Long findUserIdByIdentifier(
+            String identifier) {
+
+        return userRepository
+                .findIdByNameOrEmail(identifier.trim())
+                .orElseThrow(() ->
+                        new ResourceNotFoundException(
+                                "User not found"
+                        ));
+    }
+
+    // --------------------------------------------------
+    // Get currently authenticated user
+    // --------------------------------------------------
+
+    public User getAuthenticatedUser() {
+
+        Authentication authentication =
+                SecurityContextHolder
+                        .getContext()
+                        .getAuthentication();
+
+        if (authentication == null
+                || !authentication.isAuthenticated()) {
+
+            throw new AccessDeniedException(
+                    "User is not authenticated"
+            );
+        }
+
+        String email = authentication.getName();
+
+        return userRepository.findByEmail(email)
+                .orElseThrow(() ->
+                        new ResourceNotFoundException(
+                                "Authenticated user not found"
+                        ));
+    }
+
+    // --------------------------------------------------
+    // Validate role
+    // --------------------------------------------------
+
+    private void validateRole(String role) {
+
+        if (!role.equals("ADMIN")
+                && !role.equals("ORGANIZER")
+                && !role.equals("ATTENDEE")) {
+
+            throw new IllegalArgumentException(
+                    "Invalid user role"
+            );
+        }
     }
 }

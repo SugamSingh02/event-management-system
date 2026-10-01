@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#0b0d11" />
+    <title>Event Management System</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+
+    <!-- ==================================================
+         AUTHENTICATION
+    =================================================== -->
+    <section id="auth-view" class="screen auth-screen visible">
+        <div class="auth-orbit orbit-one"></div>
+        <div class="auth-orbit orbit-two"></div>
+
+        <div class="auth-layout">
+            <div class="auth-showcase">
+                <div class="brand-lockup">
+                    <div class="brand-mark">EV</div>
+                    <div>
+                        <strong>eventflow</strong>
+                        <span>management workspace</span>
+                    </div>
+                </div>
+
+                <div class="showcase-copy">
+                    <p class="kicker">EVENT INTELLIGENCE</p>
+                    <h1>Plan the event.<br /><span>Run the experience.</span></h1>
+                    <p class="showcase-description">
+                        One workspace for organizers, attendees, registrations, and the events that connect them.
+                    </p>
+                </div>
+
+                <div class="showcase-metrics">
+                    <div class="mini-metric">
+                        <span>01</span>
+                        <p>Discover</p>
+                        <small>Find upcoming events</small>
+                    </div>
+                    <div class="mini-metric">
+                        <span>02</span>
+                        <p>Organize</p>
+                        <small>Manage capacity and guests</small>
+                    </div>
+                    <div class="mini-metric">
+                        <span>03</span>
+                        <p>Experience</p>
+                        <small>Keep every registration visible</small>
+                    </div>
+                </div>
+
+                <div class="showcase-footer">
+                    <div class="live-dot"><span></span> SYSTEM ONLINE</div>
+                    <span>Spring Boot · MySQL · REST</span>
+                </div>
+            </div>
+
+            <div class="auth-card-wrap">
+                <div class="auth-card">
+                    <div class="auth-card-header">
+                        <div>
+                            <p class="eyebrow">SECURE ACCESS</p>
+                            <h2 id="auth-heading">Welcome back</h2>
+                            <p id="auth-description">Sign in to your event workspace.</p>
+                        </div>
+                        <div class="auth-card-status">● LIVE</div>
+                    </div>
+
+                    <div class="role-picker" aria-label="Role selector">
+                        <button id="role-toggle" type="button" class="role-toggle" aria-expanded="false">
+                            <span class="role-label-inline">Role</span>
+                            <span class="role-value-wrap">
+                                <span class="role-dot"></span>
+                                <span id="selected-role-text">Admin</span>
+                            </span>
+                            <span class="caret">⌄</span>
+                        </button>
+
+                        <div id="role-menu" class="role-menu hidden">
+                            <button type="button" class="role-option active" data-role="ADMIN">Admin</button>
+                            <button type="button" class="role-option" data-role="ORGANIZER">Organizer</button>
+                            <button type="button" class="role-option" data-role="ATTENDEE">Attendee</button>
+                        </div>
+                    </div>
+
+                    <div id="auth-message" class="auth-message hidden"></div>
+
+                    <form id="login-form" class="login-form">
+                        <label>
+                            <span>Email</span>
+                            <input id="login-identifier" type="email" autocomplete="email" placeholder="admin@event.com" required />
+                        </label>
+
+                        <label>
+                            <span>Password</span>
+                            <input id="login-password" type="password" autocomplete="current-password" placeholder="Enter your password" required />
+                        </label>
+
+                        <button type="submit" class="primary-btn primary-btn-wide">
+                            <span>Enter workspace</span>
+                            <span class="btn-arrow">↗</span>
+                        </button>
+                    </form>
+
+                    <form id="signup-form" class="signup-form hidden">
+                        <div class="form-grid auth-form-grid">
+                            <label>
+                                <span>Full Name</span>
+                                <input id="signup-name" type="text" autocomplete="name" placeholder="John Smith" required />
+                            </label>
+                            <label>
+                                <span>Email</span>
+                                <input id="signup-email" type="email" autocomplete="email" placeholder="john@example.com" required />
+                            </label>
+                        </div>
+
+                        <label>
+                            <span>Phone</span>
+                            <input id="signup-phone" type="tel" autocomplete="tel" placeholder="+91 98765 43210" required />
+                        </label>
+
+                        <label>
+                            <span>Password</span>
+                            <input id="signup-password" type="password" autocomplete="new-password" placeholder="Create a password" required />
+                        </label>
+
+                        <button type="submit" class="primary-btn primary-btn-wide">
+                            <span>Create account</span>
+                            <span class="btn-arrow">↗</span>
+                        </button>
+                    </form>
+
+                    <div class="auth-switch">
+                        <span id="auth-switch-label">Need an account?</span>
+                        <button id="show-signup-btn" type="button" class="text-btn">Sign up</button>
+                        <button id="show-login-btn" type="button" class="text-btn hidden">Back to login</button>
+                    </div>
+
+                    <div class="security-note">
+                        <span class="shield-icon">◈</span>
+                        <span>Protected by authenticated sessions and CSRF validation.</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ==================================================
+         DASHBOARD
+    =================================================== -->
+    <section id="dashboard-view" class="screen dashboard-screen hidden">
+        <div class="app-shell">
+            <aside id="sidebar" class="sidebar">
+                <div class="sidebar-top">
+                    <div class="brand-lockup sidebar-brand">
+                        <div class="brand-mark">EV</div>
+                        <div>
+                            <strong>eventflow</strong>
+                            <span>workspace</span>
+                        </div>
+                    </div>
+
+                    <div class="sidebar-section-label">WORKSPACE</div>
+                    <nav class="sidebar-nav" aria-label="Dashboard navigation">
+                        <button type="button" class="nav-item active" data-scroll-target="overview-section">
+                            <span class="nav-icon">⌂</span>
+                            <span>Overview</span>
+                        </button>
+                        <button type="button" class="nav-item" data-scroll-target="events-section">
+                            <span class="nav-icon">◫</span>
+                            <span>Events</span>
+                        </button>
+                        <button type="button" class="nav-item" data-scroll-target="registrations-section">
+                            <span class="nav-icon">◎</span>
+                            <span>Registrations</span>
+                        </button>
+                        <button type="button" class="nav-item" data-scroll-target="users-section" id="users-nav-item">
+                            <span class="nav-icon">◌</span>
+                            <span>Users</span>
+                        </button>
+                    </nav>
+                </div>
+
+                <div class="sidebar-bottom">
+                    <div class="sidebar-note">
+                        <span class="sidebar-note-icon">✦</span>
+                        <div>
+                            <strong>Every event, one view.</strong>
+                            <small>Live data from your workspace.</small>
+                        </div>
+                    </div>
+                    <div class="sidebar-meta">EVENTFLOW / 2026</div>
+                </div>
+            </aside>
+
+            <main class="main-area">
+                <header class="topbar">
+                    <div class="topbar-left">
+                        <button id="sidebar-toggle" class="icon-btn mobile-only" type="button" aria-label="Toggle navigation">☰</button>
+                        <div>
+                            <p class="eyebrow">EVENT MANAGEMENT / <span id="topbar-context">OVERVIEW</span></p>
+                            <h2 id="welcome-user">Dashboard</h2>
+                        </div>
+                    </div>
+
+                    <div class="topbar-actions">
+                        <label class="search-box">
+                            <span>⌕</span>
+                            <input id="dashboard-search" type="search" placeholder="Search dashboard" autocomplete="off" />
+                            <kbd>CTRL K</kbd>
+                        </label>
+                        <span id="role-badge" class="role-badge">ADMIN</span>
+                        <button id="logout-button" class="secondary-btn" type="button">
+                            <span>Logout</span>
+                            <span>↗</span>
+                        </button>
+                    </div>
+                </header>
+
+                <div class="dashboard-body">
+                    <div id="dashboard-content"></div>
+                </div>
+            </main>
+        </div>
+    </section>
+
+
+    <!-- EVENT DETAILS MODAL -->
+    <div id="event-modal" class="event-modal hidden" role="dialog" aria-modal="true" aria-labelledby="event-modal-title">
+        <div class="event-modal-backdrop" data-close-event-modal></div>
+        <div class="event-modal-card">
+            <button id="event-modal-close" class="event-modal-close" type="button" aria-label="Close event details">×</button>
+            <div id="event-modal-content"></div>
+        </div>
+    </div>
+
+    <!-- ATTENDEE LIST MODAL -->
+    <div id="attendees-modal" class="event-modal hidden" role="dialog" aria-modal="true" aria-labelledby="attendees-modal-title">
+        <div class="event-modal-backdrop" data-close-attendees-modal></div>
+        <div class="event-modal-card attendees-modal-card">
+            <button id="attendees-modal-close" class="event-modal-close" type="button" aria-label="Close attendee list">×</button>
+            <div id="attendees-modal-content"></div>
+        </div>
+    </div>
+
+    <!-- THEMED DATE / TIME PICKER -->
+    <div id="datetime-picker-modal" class="datetime-picker-modal hidden" role="dialog" aria-modal="true" aria-labelledby="datetime-picker-month">
+        <div class="datetime-picker-backdrop" data-close-datetime-modal></div>
+        <div class="datetime-picker-card">
+            <div class="datetime-picker-calendar-panel">
+                <div class="datetime-picker-topline">
+                    <div>
+                        <span class="datetime-picker-label">SELECT DATE</span>
+                        <strong id="datetime-picker-month">September 2026</strong>
+                    </div>
+                    <div class="datetime-picker-nav">
+                        <button type="button" class="datetime-nav-btn" data-datetime-prev aria-label="Previous month">↑</button>
+                        <button type="button" class="datetime-nav-btn" data-datetime-next aria-label="Next month">↓</button>
+                    </div>
+                </div>
+                <div id="datetime-picker-calendar" class="datetime-calendar"></div>
+                <div class="datetime-picker-footer">
+                    <button type="button" class="datetime-footer-btn" data-datetime-clear>Clear</button>
+                    <button type="button" class="datetime-footer-btn" data-datetime-today>Today</button>
+                </div>
+            </div>
+            <div class="datetime-picker-time-panel">
+                <div class="datetime-time-heading">
+                    <span>SELECT TIME</span>
+                    <strong>12-hour clock</strong>
+                </div>
+                <div class="datetime-time-columns">
+                    <div class="datetime-time-column"><span class="datetime-column-label">HOUR</span><div id="datetime-hour-list" class="datetime-time-list"></div></div>
+                    <div class="datetime-time-column"><span class="datetime-column-label">MIN</span><div id="datetime-minute-list" class="datetime-time-list"></div></div>
+                    <div class="datetime-time-column datetime-period-column"><span class="datetime-column-label">PERIOD</span><div id="datetime-period-list" class="datetime-time-list"></div></div>
+                </div>
+                <div class="datetime-picker-actions">
+                    <button type="button" class="action-btn" data-close-datetime-modal>Cancel</button>
+                    <button type="button" class="primary-btn" data-datetime-done>Set date & time ↗</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- EVENT EDIT MODAL -->
+    <div id="event-edit-modal" class="event-modal hidden" role="dialog" aria-modal="true" aria-labelledby="event-edit-title">
+        <div class="event-modal-backdrop" data-close-edit-event-modal></div>
+        <div class="event-modal-card event-edit-card">
+            <button id="event-edit-modal-close" class="event-modal-close" type="button" aria-label="Close event editor">×</button>
+            <div class="event-modal-eyebrow">EVENT MANAGEMENT</div>
+            <div class="event-modal-header edit-modal-header">
+                <div>
+                    <h2 id="event-edit-title">Edit Event</h2>
+                    <p>Update event details without changing existing registrations.</p>
+                </div>
+            </div>
+            <form id="event-edit-form" class="management-form event-edit-form">
+                <div class="form-grid">
+                    <label><span>Title</span><input type="text" name="title" required /></label>
+                    <label><span>Location</span><input type="text" name="location" required /></label>
+                </div>
+                <label><span>Description</span><textarea name="description" rows="4" required></textarea></label>
+                <div class="form-grid">
+                    <label><span>Event Date</span>
+                            <div class="datetime-picker-field">
+                                <input type="text" class="datetime-display" data-datetime-display placeholder="dd/mm/yyyy --:-- --" readonly required aria-label="Event date and time" />
+                                <input type="hidden" name="eventDate" data-datetime-value />
+                                <button type="button" class="datetime-trigger" data-open-datetime-picker aria-label="Choose event date and time">◷</button>
+                            </div>
+                        </label>
+                    <label><span>Capacity</span><input type="number" name="capacity" min="1" required /></label>
+                </div>
+                <div class="edit-form-note">Existing confirmed registrations are preserved. Capacity cannot be reduced below the number already registered.</div>
+                <div class="modal-form-actions">
+                    <button type="button" class="action-btn" id="event-edit-cancel">Cancel</button>
+                    <button type="submit" class="primary-btn">Save changes ↗</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
